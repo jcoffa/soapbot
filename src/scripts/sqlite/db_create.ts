@@ -16,7 +16,8 @@ const createDB = async () => {
                 "scheduled_end_at TEXT, " +
                 "subscriber_num INTEGER, " +
                 "location TEXT, " +
-                "image_url TEXT" +
+                "image_url TEXT, " +
+                "is_past BOOLEAN NOT NULL" +
                 ")"
         );
     } catch (error) {

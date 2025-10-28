@@ -36,9 +36,17 @@ const migrateSaved = async () => {
         try {
             await runWithParams(
                 db,
-                "INSERT INTO events (id, guild_id, role_id, name, description, scheduled_start_at) " +
-                    `VALUES (?, ?, ?, ?, ?, ?)`,
-                [eventId, guild, role, name, description, scheduledStartAt]
+                "INSERT INTO events (id, guild_id, role_id, name, description, scheduled_start_at, is_past) " +
+                    `VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    eventId,
+                    guild,
+                    role,
+                    name,
+                    description,
+                    scheduledStartAt,
+                    false,
+                ]
             );
         } catch (error) {
             console.log(error);

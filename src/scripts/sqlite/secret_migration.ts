@@ -64,8 +64,8 @@ const migrateSecrets = async () => {
             try {
                 await runWithParams(
                     db,
-                    "INSERT INTO events (id, guild_id, name, description, scheduled_start_at, scheduled_end_at, subscriber_num, location, image_url) " +
-                        `VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    "INSERT INTO events (id, guild_id, name, description, scheduled_start_at, scheduled_end_at, subscriber_num, location, image_url, is_past) " +
+                        `VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         "OLD_" + counter,
                         fileNames[guild],
@@ -76,6 +76,7 @@ const migrateSecrets = async () => {
                         subscriberNum,
                         location,
                         imageURL,
+                        true,
                     ]
                 );
                 counter++;

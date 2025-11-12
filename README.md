@@ -10,7 +10,7 @@ This bot also has slash commands with other useful features. Check out the [wiki
 
 ## Installation
 
-Use the link below to add sophbot to your server:
+Use the link below to add soapbot to your server:
 https://discord.com/oauth2/authorize?client_id=834955651796828190
 
 ## Development Setup

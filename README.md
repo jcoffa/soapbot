@@ -1,4 +1,4 @@
-# Discord Event Role Manager
+# Soapbot
 
 A role manager bot for discord that deals with managing roles for events.
 

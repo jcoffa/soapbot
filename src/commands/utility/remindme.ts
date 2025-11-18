@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024  Sophia Beluli
+ * Copyright (C) 2024  Sage Beluli
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
@@ -37,9 +37,7 @@ const numToString = new Map<number, string>([
 const RemindMe: Command = {
     data: new SlashCommandBuilder()
         .setName("remindme")
-        .setDescription(
-            "Set up a one time ping as a reminder. (May induce dementia)"
-        )
+        .setDescription("Set up a one time ping as a reminder. (May induce dementia)")
         .addStringOption((option) =>
             option
                 .setName("message")
@@ -51,9 +49,7 @@ const RemindMe: Command = {
         .addNumberOption((option) =>
             option
                 .setName("time_units")
-                .setDescription(
-                    "The units of the time you want to input. Default: hours"
-                )
+                .setDescription("The units of the time you want to input. Default: hours")
                 .setChoices(
                     { name: "minutes", value: 60000 },
                     { name: "hours", value: 3600000 },
@@ -72,9 +68,7 @@ const RemindMe: Command = {
         .addChannelOption((option) =>
             option
                 .setName("channel")
-                .setDescription(
-                    "The channel to remind you in. Default: Current Channel"
-                )
+                .setDescription("The channel to remind you in. Default: Current Channel")
                 // Ensure the user can only select a TextChannel for output
                 .addChannelTypes(ChannelType.GuildText)
         )

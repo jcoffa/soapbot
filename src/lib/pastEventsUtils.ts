@@ -1,18 +1,31 @@
-import fs from "node:fs";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
+/*
+ * Copyright (C) 2024  Sophia Beluli
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Contact details for information regarding this program and its license
+ * can be found on sophiabeluli.ca
+ */
+
 import {
     ActionRowBuilder,
     APIEmbed,
     ButtonBuilder,
     ComponentType,
-    GuildScheduledEvent,
     RepliableInteraction,
 } from "discord.js";
-import { EventDetails } from "..";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { fetchPastEvents } from "./db/events";
 
 const backId = "back";
 const forwardId = "forward";
@@ -30,93 +43,21 @@ const forwardButton = new ButtonBuilder({
 
 // Time
 
-export const convertDateObjectToDateTime = (date: Date) => {
-    const day = date.toLocaleString("default", { day: "numeric" });
-    const month = date.toLocaleString("default", { month: "long" });
-    const year = date.toLocaleString("default", { year: "numeric" });
-    const time = date.toLocaleTimeString();
+export const convertDateStringToDateTime = (date: string) => {
+    const dateDate = new Date(date);
+    const day = dateDate.toLocaleString("default", { day: "numeric" });
+    const month = dateDate.toLocaleString("default", { month: "long" });
+    const year = dateDate.toLocaleString("default", { year: "numeric" });
+    const time = dateDate.toLocaleTimeString();
 
     return month + " " + day + ", " + year + " at " + time;
 };
 
 // Previous Events
 
-export const saveFinishedEvent = (event: GuildScheduledEvent) => {
-    console.log("saving finished event from " + event.guild.name);
-    const guildId = event.guild.id;
-    const savedEvents = loadPreviousEvents(guildId);
-    if (savedEvents.length === 5) {
-        savedEvents.shift();
-    }
-    try {
-        savedEvents.push({
-            title: event.name,
-            description: event.description,
-            scheduledStartAt: event.scheduledStartAt,
-            scheduledEndAt: event.scheduledEndAt,
-            subscriberNum: event.userCount || 1,
-            location: event.entityMetadata?.location,
-            imageURL: event.coverImageURL({ extension: "png", size: 4096 }),
-        });
-    } catch (err) {
-        console.error(err);
-    }
-
-    writePreviousEvents(guildId, savedEvents);
-};
-
-export const loadPreviousEvents = (guildId: string): Array<EventDetails> => {
-    const fileName = "secret-" + guildId + ".json";
-    const file = __dirname + "/" + fileName;
-
-    // Load Data
-    if (!fs.existsSync(file)) {
-        console.warn("Event secret file doesnt exist");
-        const content = JSON.stringify([]);
-        try {
-            fs.writeFileSync(file, content, "utf8");
-        } catch (err) {
-            console.error(err);
-        }
-    }
-    try {
-        let previousEvents: Array<EventDetails> = JSON.parse(
-            fs.readFileSync(file, "utf8")
-        );
-
-        previousEvents.forEach((event, _index) => {
-            if (event.scheduledStartAt !== null) {
-                event.scheduledStartAt = new Date(event.scheduledStartAt);
-            }
-            if (event.scheduledEndAt !== null) {
-                event.scheduledEndAt = new Date(event.scheduledEndAt);
-            }
-        });
-
-        return previousEvents;
-    } catch (err) {
-        console.error(err);
-        return [];
-    }
-};
-
-export const writePreviousEvents = (
-    guildId: string,
-    savedEvents: Array<EventDetails>
-) => {
-    const fileName = "secret-" + guildId + ".json";
-    const file = __dirname + "/" + fileName;
-    try {
-        fs.writeFileSync(file, JSON.stringify(savedEvents), "utf8");
-    } catch (err) {
-        console.error(err);
-    }
-    console.log(guildId + "event secret file updated");
-};
-
 export const listPreviousEvents = async (interaction: RepliableInteraction) => {
     let pageArray: APIEmbed[] = [];
-    const events = loadPreviousEvents(interaction.guildId);
+    const events = await fetchPastEvents(interaction.guildId);
 
     if (events.length === 0) {
         try {
@@ -131,7 +72,7 @@ export const listPreviousEvents = async (interaction: RepliableInteraction) => {
     }
     events.forEach((event, _index) => {
         let page: APIEmbed = {
-            title: event.title,
+            title: event.name,
             // description: event.description,
             // .setThumbnail(event.imageURL)
             fields: [
@@ -145,24 +86,25 @@ export const listPreviousEvents = async (interaction: RepliableInteraction) => {
                 },
                 {
                     name: "Number of Subscribers",
-                    value: event.subscriberNum?.toString() || "N/A",
+                    value: event.subscriber_num?.toString() || "N/A",
                 },
                 {
                     name: "Scheduled Start Date",
-                    value: event.scheduledStartAt
-                        ? convertDateObjectToDateTime(event.scheduledStartAt)
-                        : "N/A",
+                    value:
+                        event.scheduled_start_at || "N/A"
+                            ? convertDateStringToDateTime(event.scheduled_start_at)
+                            : "N/A",
                     inline: true,
                 },
                 {
                     name: "Scheduled End Date",
-                    value: event.scheduledEndAt
-                        ? convertDateObjectToDateTime(event.scheduledEndAt)
+                    value: event.scheduled_end_at
+                        ? convertDateStringToDateTime(event.scheduled_end_at)
                         : "N/A",
                     inline: true,
                 },
             ],
-            image: { url: event.imageURL },
+            image: { url: event.image_url },
         };
 
         pageArray.push(page);

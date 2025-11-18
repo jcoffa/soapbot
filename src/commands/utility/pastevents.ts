@@ -18,13 +18,8 @@
  * can be found on sophiabeluli.ca
  */
 
-import {
-    RepliableInteraction,
-    SlashCommandBuilder,
-    // APIEmbed,
-} from "discord.js";
+import { RepliableInteraction, SlashCommandBuilder } from "discord.js";
 import { Command } from "../definitions";
-// import { loadPreviousEvents } from "../..";
 import pubsub from "pubsub-js";
 
 const PastEvents: Command = {

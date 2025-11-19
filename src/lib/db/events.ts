@@ -100,7 +100,7 @@ export const fetchPastEventsByGuild = async (guildId: string) => {
     try {
         const res: DiscordEvent[] = await allWithParams(
             db,
-            "SELECT * FROM events WHERE guild_id=? AND is_past=TRUE ORDER_BY scheduled_end_at LIMIT 50",
+            "SELECT * FROM events WHERE guild_id=? AND is_past=TRUE ORDER BY scheduled_end_at LIMIT 50",
             [guildId]
         );
         return res;

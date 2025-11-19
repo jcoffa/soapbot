@@ -133,7 +133,7 @@ export const addNewEvent = async (event: DiscordEvent) => {
     } catch (error) {
         console.log(error);
     } finally {
-        console.log("successfully added new event");
+        console.log("successfully added new event: " + event.name);
         db.close();
     }
 };
@@ -157,7 +157,7 @@ export const updateToPastEvent = async (event: DiscordEvent) => {
     } catch (error) {
         console.log(error);
     } finally {
-        console.log("successfully updated to past event");
+        console.log("successfully updated to past event: " + event.name);
         db.close();
     }
 };
@@ -180,7 +180,7 @@ export const update = async (event: DiscordEvent) => {
     } catch (error) {
         console.log(error);
     } finally {
-        console.log("successfully updated event");
+        console.log("successfully updated event: " + event.name);
         db.close();
     }
 };

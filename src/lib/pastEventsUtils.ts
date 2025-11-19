@@ -29,6 +29,8 @@ import { fetchPastEventsByGuild } from "./db/events";
 
 const backId = "back";
 const forwardId = "forward";
+const firstId = "first";
+const lastId = "last";
 const backButton = new ButtonBuilder({
     style: 2,
     label: "◀",
@@ -39,6 +41,17 @@ const forwardButton = new ButtonBuilder({
     style: 2,
     label: "▶",
     customId: forwardId,
+});
+const firstButton = new ButtonBuilder({
+    style: 2,
+    label: "◀◀",
+    customId: firstId,
+    disabled: true,
+});
+const lastButton = new ButtonBuilder({
+    style: 2,
+    label: "▶",
+    customId: lastId,
 });
 
 // Time
@@ -59,6 +72,18 @@ export const listPreviousEvents = async (interaction: RepliableInteraction) => {
     let pageArray: APIEmbed[] = [];
     const events = await fetchPastEventsByGuild(interaction.guildId);
 
+    if (!events) {
+        try {
+            interaction.editReply({
+                content:
+                    "Oops! Something went wrong fetching your events :( Please contact the developer.",
+                components: [],
+            });
+            return;
+        } catch (err) {
+            console.error(err);
+        }
+    }
     if (events.length === 0) {
         try {
             interaction.editReply({
@@ -115,8 +140,10 @@ export const listPreviousEvents = async (interaction: RepliableInteraction) => {
             embeds: [pageArray[pageArray.length - 1]],
             components: [
                 new ActionRowBuilder<ButtonBuilder>()
+                    .addComponents([firstButton])
                     .addComponents([backButton])
-                    .addComponents([forwardButton]),
+                    .addComponents([forwardButton])
+                    .addComponents([lastButton]),
             ],
         });
 
@@ -134,18 +161,31 @@ export const listPreviousEvents = async (interaction: RepliableInteraction) => {
             });
 
             collector.on("collect", async (i) => {
-                i.customId === backId ? currentIndex++ : currentIndex--; // update page index
+                // update page index
+                if (i.customId === backId) {
+                    currentIndex++;
+                } else if (i.customId === forwardId) {
+                    currentIndex--;
+                } else if (i.customId === firstId) {
+                    currentIndex = pageArray.length - 1;
+                } else {
+                    currentIndex = 0;
+                }
 
                 // set button disabled state
                 if (currentIndex < pageArray.length - 1) {
                     backButton.setDisabled(false);
+                    firstButton.setDisabled(false);
                 } else {
                     backButton.setDisabled(true);
+                    firstButton.setDisabled(true);
                 }
                 if (currentIndex) {
                     forwardButton.setDisabled(false);
+                    lastButton.setDisabled(false);
                 } else {
                     forwardButton.setDisabled(true);
+                    lastButton.setDisabled(true);
                 }
 
                 await i
@@ -153,8 +193,10 @@ export const listPreviousEvents = async (interaction: RepliableInteraction) => {
                         embeds: [pageArray[currentIndex]],
                         components: [
                             new ActionRowBuilder<ButtonBuilder>()
+                                .addComponents([firstButton])
                                 .addComponents([backButton])
-                                .addComponents([forwardButton]),
+                                .addComponents([forwardButton])
+                                .addComponents([lastButton]),
                         ],
                     })
                     .catch((err) => {

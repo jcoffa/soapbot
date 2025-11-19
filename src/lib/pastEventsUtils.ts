@@ -25,7 +25,7 @@ import {
     ComponentType,
     RepliableInteraction,
 } from "discord.js";
-import { fetchPastEvents } from "./db/events";
+import { fetchPastEventsByGuild } from "./db/events";
 
 const backId = "back";
 const forwardId = "forward";
@@ -57,7 +57,7 @@ export const convertDateStringToDateTime = (date: string) => {
 
 export const listPreviousEvents = async (interaction: RepliableInteraction) => {
     let pageArray: APIEmbed[] = [];
-    const events = await fetchPastEvents(interaction.guildId);
+    const events = await fetchPastEventsByGuild(interaction.guildId);
 
     if (events.length === 0) {
         try {

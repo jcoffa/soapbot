@@ -54,8 +54,8 @@ export const formatEvent = (
         role_id: roleID,
         name: event.name,
         description: event.description,
-        scheduled_start_at: event.scheduledStartAt.toISOString(),
-        scheduled_end_at: event.scheduledEndAt.toISOString(),
+        scheduled_start_at: event.scheduledStartAt?.toISOString(),
+        scheduled_end_at: event.scheduledEndAt?.toISOString(),
         subscriber_num: event.userCount,
         location: event.entityMetadata?.location,
         image_url: event.coverImageURL({ extension: "png", size: 4096 }),
@@ -79,13 +79,13 @@ export const fetchEvent = async (eventId: string): Promise<DiscordEvent> => {
     }
 };
 
-export const fetchByGuild = async (guildId: string) => {
+export const fetchCurrentEventsByGuild = async (guildId: string) => {
     const db = new sqlite3.Database("soapbot.db");
     try {
         const res: DiscordEvent[] = await allWithParams(
             db,
-            "SELECT * FROM events WHERE guild_id=?",
-            [guildId]
+            "SELECT * FROM events WHERE guild_id=? AND is_past=?",
+            [guildId, false]
         );
         return res;
     } catch (error) {
@@ -95,7 +95,7 @@ export const fetchByGuild = async (guildId: string) => {
     }
 };
 
-export const fetchPastEvents = async (guildId: string) => {
+export const fetchPastEventsByGuild = async (guildId: string) => {
     const db = new sqlite3.Database("soapbot.db");
     try {
         const res: DiscordEvent[] = await allWithParams(
@@ -116,8 +116,8 @@ export const addNewEvent = async (event: DiscordEvent) => {
     try {
         await runWithParams(
             db,
-            "INSERT INTO events (id, guild_id, role_id, name, description, scheduled_start_at, location, image_url, is_past) " +
-                `VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE)`,
+            "INSERT INTO events (id, guild_id, role_id, name, description, scheduled_start_at, subscriber_num, location, image_url, is_past) " +
+                `VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE)`,
             [
                 event.id,
                 event.guild_id,
@@ -125,6 +125,7 @@ export const addNewEvent = async (event: DiscordEvent) => {
                 event.name,
                 event.description,
                 event.scheduled_start_at,
+                1,
                 event.location,
                 event.image_url,
             ]

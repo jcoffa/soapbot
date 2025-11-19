@@ -39,7 +39,7 @@ import { listPreviousEvents } from "./lib/pastEventsUtils";
 import { RemindMeData } from "./commands/definitions";
 import {
     addNewEvent,
-    fetchByGuild,
+    fetchCurrentEventsByGuild,
     fetchEvent,
     formatEvent,
     update,
@@ -71,35 +71,23 @@ export interface EventDetails {
 
 const token = process.env.TOKEN;
 let isReady = true; // flag to determine if initial routine is done
-let addDone = false;
-let deleteDone = false;
-
-const checkIfReady = () => {
-    if (addDone && deleteDone) {
-        isReady = true;
-    }
-};
 
 const updateEventsRoles = async () => {
     isReady = false;
     console.log("start initial routine");
-    // checks events in registered guilds and sees if they are in the saved file
-    // adds them to the file if not
+    // checks events in db and sees if they exist
+    // deletes them from db if not
+    deleteMissedEvents();
+    // checks events in registered guilds and sees if they are in db
+    // adds them to db if not
+    // also checks subscribers and adds/removes roles from users
     addMissedEvents().then(() => {
-        console.log("********added missed events");
-        addDone = true;
-        checkIfReady();
-    });
-    // checks events in file and sees if they exist in any guild
-    // deletes them from file if not
-    deleteMissedEvents().then(() => {
-        console.log("********deleted missed events");
-        deleteDone = true;
-        checkIfReady();
+        isReady = true; // we can set ready after this because deleted events wont effect incoming event changes
+        console.log("ready");
     });
 };
 
-const addMissedEvents = async (): Promise<void> => {
+const addMissedEvents = async (): Promise<Collection<string, OAuth2Guild>> => {
     try {
         const guilds = await client.guilds.fetch();
         printGuilds(guilds);
@@ -183,6 +171,7 @@ const addMissedEvents = async (): Promise<void> => {
                 console.error(err);
             }
         }
+        return guilds;
     } catch (err) {
         console.error(err);
     }
@@ -193,18 +182,37 @@ const deleteMissedEvents = async (): Promise<void> => {
         const guilds = await client.guilds.fetch();
         for (const [guildId, OAuth2Guild] of guilds) {
             try {
-                const events = await fetchByGuild(guildId);
+                const events = await fetchCurrentEventsByGuild(guildId);
                 const guild = await OAuth2Guild.fetch();
                 for (const event of events) {
-                    if (!guild.scheduledEvents.fetch(event.id)) {
-                        try {
-                            await guild.roles.delete(event.role_id);
-                        } catch (err) {
-                            console.error(err);
-                        }
-                        console.log("incorrect role deleted: " + event.role_id);
-                        updateToPastEvent(event);
-                    }
+                    guild.scheduledEvents
+                        .fetch(event.id)
+                        .then(async (discordEv) => {
+                            // is cancelled or is finished
+                            if (discordEv.status === 3 || discordEv.status === 4) {
+                                try {
+                                    await guild.roles.delete(event.role_id);
+                                } catch (err) {
+                                    console.error(err);
+                                }
+                                console.log("incorrect role deleted: " + event.role_id);
+                                updateToPastEvent(event);
+                            }
+                        })
+                        .catch(async (err) => {
+                            // doesnt exist
+                            if (err.name.includes("DiscordAPIError[10070]")) {
+                                try {
+                                    await guild.roles.delete(event.role_id);
+                                } catch (err) {
+                                    console.error(err);
+                                }
+                                console.log("incorrect role deleted: " + event.role_id);
+                                updateToPastEvent(event);
+                            } else {
+                                console.error(err);
+                            }
+                        });
                 }
             } catch (err) {
                 console.error(err);

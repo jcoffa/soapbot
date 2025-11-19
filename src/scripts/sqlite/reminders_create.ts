@@ -18,26 +18,29 @@
  * can be found on sophiabeluli.ca
  */
 
-import {
-    ChatInputCommandInteraction,
-    GuildTextBasedChannel,
-    RepliableInteraction,
-    SlashCommandBuilder,
-    SlashCommandOptionsOnlyBuilder,
-} from "discord.js";
+import sqlite3 from "sqlite3";
+import { execute } from "./sqlite_lib";
 
-export interface Command {
-    data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
-    execute:
-        | ((interaction: RepliableInteraction) => void)
-        | ((interaction: ChatInputCommandInteraction) => void);
-}
+const createDB = async () => {
+    const db = new sqlite3.Database("soapbot.db");
+    try {
+        await execute(
+            db,
+            "CREATE TABLE IF NOT EXISTS reminders (" +
+                "id INTEGER PRIMARY KEY, " +
+                "guild_id TEXT NOT NULL, " +
+                "user_id TEXT NOT NULL, " +
+                "channel_id TEXT NOT NULL, " +
+                "message TEXT NOT NULL, " +
+                "date INTEGER NOT NULL, " +
+                ")"
+        );
+    } catch (error) {
+        console.log(error);
+    } finally {
+        console.log("Table created successfully!");
+        db.close();
+    }
+};
 
-export interface RemindMeData {
-    guildId: string;
-    userId: string;
-    channelId: string;
-    message: string;
-    time: number;
-    timeMult: number;
-}
+createDB();

@@ -80,6 +80,7 @@ const RemindMe: Command = {
                 )
         ),
     async execute(interaction: ChatInputCommandInteraction) {
+        const guildId = interaction.guildId;
         const userId = interaction.user.id;
         const message = interaction.options.getString("message");
         const timeMult = interaction.options.getNumber("time_units") ?? 3600000;
@@ -90,7 +91,14 @@ const RemindMe: Command = {
         const channel = channelInput ?? interaction.channel;
         const ephemeral = interaction.options.getBoolean("ephemeral") ?? true;
 
-        const data: RemindMeData = { userId, message, timeMult, time, channel };
+        const data: RemindMeData = {
+            guildId,
+            userId,
+            channelId: channel.id,
+            message,
+            time,
+            timeMult,
+        };
         const page: APIEmbed = {
             title: "Reminder Set",
             fields: [

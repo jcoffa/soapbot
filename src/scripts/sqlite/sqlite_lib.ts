@@ -31,6 +31,15 @@ export const execute = async (db: Database, sql: string) => {
     });
 };
 
+export const get = async (db: Database, sql: string) => {
+    return new Promise<any>((resolve, reject) => {
+        db.get(sql, (err, row) => {
+            if (err) reject(err);
+            resolve(row);
+        });
+    });
+};
+
 export const runWithParams = async (db: Database, sql: string, params: any[]) => {
     return new Promise<void>((resolve, reject) => {
         db.run(sql, params, (err) => {

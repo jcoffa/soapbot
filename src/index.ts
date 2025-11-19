@@ -26,6 +26,7 @@ import {
     GuildMember,
     GuildScheduledEvent,
     GuildScheduledEventStatus,
+    GuildTextBasedChannel,
     OAuth2Guild,
     PartialGuildScheduledEvent,
     RepliableInteraction,
@@ -47,6 +48,7 @@ import {
     updateSubscriberNumTotal,
     updateToPastEvent,
 } from "./lib/db/events";
+import { addReminder, fetchSoonestReminder, formatReminder } from "./lib/db/reminders";
 
 export interface eventsRolesInfo {
     // for lookup
@@ -71,6 +73,9 @@ export interface EventDetails {
 
 const token = process.env.TOKEN;
 let isReady = true; // flag to determine if initial routine is done
+let reminderInterval: NodeJS.Timeout;
+
+// Initial Routines
 
 const updateEventsRoles = async () => {
     isReady = false;
@@ -220,6 +225,8 @@ const deleteMissedEvents = async (): Promise<void> => {
     }
 };
 
+// Events
+
 const onCreateEvent = async (
     guildScheduledEvent: GuildScheduledEvent<GuildScheduledEventStatus>
 ): Promise<string> => {
@@ -252,6 +259,41 @@ const onCreateEvent = async (
         });
 };
 
+// Reminders
+
+const checkReminders = async () => {
+    const reminder = await fetchSoonestReminder();
+    // if the reminder date is now or has passed
+    if (new Date().toISOString().localeCompare(reminder.date) >= 0) {
+        const { guild_id, user_id, channel_id, message } = reminder;
+        client.guilds
+            .fetch(guild_id)
+            .then((guild) => {
+                guild.channels
+                    .fetch(channel_id)
+                    .then((channel) => {
+                        (channel as GuildTextBasedChannel)
+                            .send(`**Reminder** for <@${user_id}>:\n${message}`)
+                            .catch(console.error);
+                    })
+                    .catch(console.error);
+            })
+            .catch(console.error);
+        // we dont want to wait another 30 seconds
+        // we want to see if the next soonest reminder is also now
+        // so clear the interval and start it again
+        clearInterval(reminderInterval);
+        startRemindersCheck();
+    }
+};
+
+const startRemindersCheck = () => {
+    checkReminders(); // run immediately
+    reminderInterval = setInterval(async () => {
+        checkReminders();
+    }, 30000);
+};
+
 // Pubsub
 
 const subscribe = () => {
@@ -259,12 +301,7 @@ const subscribe = () => {
         listPreviousEvents(interaction);
     });
     pubsub.subscribe("remindme", (_msg, data: RemindMeData) => {
-        const { userId, message, timeMult, time, channel } = data;
-        setTimeout(() => {
-            channel
-                .send(`**Reminder** for <@${userId}>:\n${message}`)
-                .catch(console.error);
-        }, time * timeMult);
+        addReminder(formatReminder(data));
     });
 };
 
@@ -300,6 +337,7 @@ client.once(Events.ClientReady, (readyClient) => {
     console.log(`Ready! Logged in as ${readyClient.user.tag}`);
     subscribe();
     printGuilds();
+    startRemindersCheck();
     updateEventsRoles();
 });
 

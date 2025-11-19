@@ -75,9 +75,6 @@ let isReady = true; // flag to determine if initial routine is done
 const updateEventsRoles = async () => {
     isReady = false;
     console.log("start initial routine");
-    // checks events in db and sees if they exist
-    // deletes them from db if not
-    deleteMissedEvents();
     // checks events in registered guilds and sees if they are in db
     // adds them to db if not
     // also checks subscribers and adds/removes roles from users
@@ -85,12 +82,14 @@ const updateEventsRoles = async () => {
         isReady = true; // we can set ready after this because deleted events wont effect incoming event changes
         console.log("ready");
     });
+    // checks events in db and sees if they exist
+    // deletes them from db if not
+    deleteMissedEvents();
 };
 
 const addMissedEvents = async (): Promise<Collection<string, OAuth2Guild>> => {
     try {
         const guilds = await client.guilds.fetch();
-        printGuilds(guilds);
         for (const guildInfo of guilds) {
             try {
                 const guild = await guildInfo[1].fetch();
@@ -101,7 +100,7 @@ const addMissedEvents = async (): Promise<Collection<string, OAuth2Guild>> => {
                     const eventDB = await fetchEvent(id);
                     if (!eventDB) {
                         // make role if it doesn't exist
-                        console.log("role doesnt exist; creating");
+                        console.log("role doesnt exist for " + event.name + "; creating");
                         role = await onCreateEvent(event);
                     } else {
                         console.log("role exists for " + event.name);
@@ -135,7 +134,7 @@ const addMissedEvents = async (): Promise<Collection<string, OAuth2Guild>> => {
 
                                     if (res) {
                                         console.log(
-                                            `added missing role (${role}) to ${user.user.username}`
+                                            `added missing role (${event.name}) to ${user.user.username}`
                                         );
                                     }
                                 } catch (err) {
@@ -154,7 +153,7 @@ const addMissedEvents = async (): Promise<Collection<string, OAuth2Guild>> => {
                                     });
                                     if (res) {
                                         console.log(
-                                            `removed incorrect role (${role}) from ${member.user.username}`
+                                            `removed incorrect role (${event.name}) from ${member.user.username}`
                                         );
                                     }
                                 } catch (err) {
@@ -185,34 +184,32 @@ const deleteMissedEvents = async (): Promise<void> => {
                 const events = await fetchCurrentEventsByGuild(guildId);
                 const guild = await OAuth2Guild.fetch();
                 for (const event of events) {
-                    guild.scheduledEvents
-                        .fetch(event.id)
-                        .then(async (discordEv) => {
-                            // is cancelled or is finished
-                            if (discordEv.status === 3 || discordEv.status === 4) {
-                                try {
-                                    await guild.roles.delete(event.role_id);
-                                } catch (err) {
-                                    console.error(err);
+                    // if doesnt exist
+                    if (!guild.scheduledEvents.resolve(event.id)) {
+                        try {
+                            await guild.roles.delete(event.role_id);
+                        } catch (err) {
+                            console.error(err);
+                        }
+                        console.log("old role deleted: " + event.role_id);
+                        updateToPastEvent(event);
+                    } else {
+                        guild.scheduledEvents
+                            .fetch(event.id)
+                            .then(async (discordEv) => {
+                                // is cancelled or is finished
+                                if (discordEv.status === 3 || discordEv.status === 4) {
+                                    try {
+                                        await guild.roles.delete(event.role_id);
+                                    } catch (err) {
+                                        console.error(err);
+                                    }
+                                    console.log("old role deleted: " + event.role_id);
+                                    updateToPastEvent(event);
                                 }
-                                console.log("incorrect role deleted: " + event.role_id);
-                                updateToPastEvent(event);
-                            }
-                        })
-                        .catch(async (err) => {
-                            // doesnt exist
-                            if (err.name.includes("DiscordAPIError[10070]")) {
-                                try {
-                                    await guild.roles.delete(event.role_id);
-                                } catch (err) {
-                                    console.error(err);
-                                }
-                                console.log("incorrect role deleted: " + event.role_id);
-                                updateToPastEvent(event);
-                            } else {
-                                console.error(err);
-                            }
-                        });
+                            })
+                            .catch(console.error);
+                    }
                 }
             } catch (err) {
                 console.error(err);
@@ -242,7 +239,9 @@ const onCreateEvent = async (
                     user: guildScheduledEvent.creatorId,
                 })
                 .then(() =>
-                    console.log("added role to creator: " + guildScheduledEvent.creatorId)
+                    console.log(
+                        `added role (${guildScheduledEvent.name}) to creator: ${guildScheduledEvent.creatorId}`
+                    )
                 )
                 .catch(console.error);
             return role.id;
@@ -269,10 +268,12 @@ const subscribe = () => {
     });
 };
 
-const printGuilds = (guilds: Collection<string, OAuth2Guild>) => {
-    console.log("Guilds:");
-    guilds.forEach((guild) => {
-        console.log(guild.name + ": " + guild.id);
+const printGuilds = () => {
+    client.guilds.fetch().then((guilds) => {
+        console.log("Guilds:");
+        guilds.forEach((guild) => {
+            console.log(guild.name + ": " + guild.id);
+        });
     });
 };
 
@@ -298,6 +299,7 @@ for (const command of allCommands) {
 client.once(Events.ClientReady, (readyClient) => {
     console.log(`Ready! Logged in as ${readyClient.user.tag}`);
     subscribe();
+    printGuilds();
     updateEventsRoles();
 });
 
@@ -348,7 +350,7 @@ client.on(
     ): Promise<void> => {
         const createEvent = () => {
             if (isReady) {
-                console.log("event created");
+                console.log("event created: " + guildScheduledEvent.name);
                 onCreateEvent(guildScheduledEvent);
             } else {
                 setTimeout(createEvent, 5000);
@@ -367,13 +369,13 @@ client.on(
     ): Promise<void> => {
         const deleteEvent = () => {
             if (isReady) {
-                console.log("event deleted");
+                console.log("event deleted: " + guildScheduledEvent.name);
                 fetchEvent(guildScheduledEvent.id).then((event) => {
                     if (event) {
                         guildScheduledEvent.guild.roles
                             .delete(event.role_id)
                             .then(() => {
-                                console.log("role deleted: " + event.role_id);
+                                console.log("role deleted for " + event.name);
                                 updateToPastEvent(
                                     formatEvent(guildScheduledEvent, event.role_id)
                                 );
@@ -409,12 +411,14 @@ client.on(
                             newGuildScheduledEvent.status === 3 ||
                             newGuildScheduledEvent.status === 4
                         ) {
-                            console.log("event canceled");
+                            console.log("event canceled: " + newGuildScheduledEvent.name);
                             // complete or canceled
                             newGuildScheduledEvent.guild.roles
                                 .delete(event.role_id)
                                 .then(() => {
-                                    console.log("role deleted: " + event.role_id);
+                                    console.log(
+                                        "role deleted for " + newGuildScheduledEvent.name
+                                    );
                                     updateToPastEvent(
                                         formatEvent(newGuildScheduledEvent, event.role_id)
                                     );
@@ -428,7 +432,9 @@ client.on(
                                     name: newGuildScheduledEvent.name,
                                 })
                                 .then(() => {
-                                    console.log("role edited: " + event.role_id);
+                                    console.log(
+                                        "role edited for " + newGuildScheduledEvent.name
+                                    );
                                     update(
                                         formatEvent(newGuildScheduledEvent, event.role_id)
                                     );
@@ -472,7 +478,7 @@ client.on(
                                     "user subscribed: " +
                                         user.username +
                                         " - " +
-                                        guildScheduledEvent.id
+                                        guildScheduledEvent.name
                                 );
                                 updateSubscriberNum(guildScheduledEvent.id, true);
                             })
@@ -509,7 +515,7 @@ client.on(
                                     "user unsubscribed: " +
                                         user.username +
                                         " - " +
-                                        guildScheduledEvent.id
+                                        guildScheduledEvent.name
                                 );
                                 updateSubscriberNum(guildScheduledEvent.id, false);
                             })

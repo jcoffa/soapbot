@@ -20,7 +20,6 @@
 
 import {
     ChatInputCommandInteraction,
-    GuildTextBasedChannel,
     RepliableInteraction,
     SlashCommandBuilder,
     SlashCommandOptionsOnlyBuilder,

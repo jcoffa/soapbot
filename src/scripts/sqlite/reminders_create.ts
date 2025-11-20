@@ -32,7 +32,7 @@ const createDB = async () => {
                 "user_id TEXT NOT NULL, " +
                 "channel_id TEXT NOT NULL, " +
                 "message TEXT NOT NULL, " +
-                "date INTEGER NOT NULL, " +
+                "date INTEGER NOT NULL" +
                 ")"
         );
     } catch (error) {

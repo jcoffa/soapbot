@@ -19,6 +19,7 @@
         "migration": "node --experimental-specifier-resolution=node --loader ts-node/esm src/scripts/migration.ts",
         "db:create": "node --experimental-specifier-resolution=node --loader ts-node/esm src/scripts/sqlite/db_create.ts",
         "db:migratesaved": "node --experimental-specifier-resolution=node --loader ts-node/esm src/scripts/sqlite/saved_migration.ts",
-        "db:migratesecret": "node --experimental-specifier-resolution=node --loader ts-node/esm src/scripts/sqlite/secret_migration.ts"
+        "db:migratesecret": "node --experimental-specifier-resolution=node --loader ts-node/esm src/scripts/sqlite/secret_migration.ts",
+        "reminders:create": "node --experimental-specifier-resolution=node --loader ts-node/esm src/scripts/sqlite/reminders_create.ts"
     }
 }

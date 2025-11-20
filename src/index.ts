@@ -48,7 +48,12 @@ import {
     updateSubscriberNumTotal,
     updateToPastEvent,
 } from "./lib/db/events";
-import { addReminder, fetchSoonestReminder, formatReminder } from "./lib/db/reminders";
+import {
+    addReminder,
+    deleteReminder,
+    fetchSoonestReminder,
+    formatReminder,
+} from "./lib/db/reminders";
 
 export interface eventsRolesInfo {
     // for lookup
@@ -72,7 +77,8 @@ export interface EventDetails {
 }
 
 const token = process.env.TOKEN;
-let isReady = true; // flag to determine if initial routine is done
+
+let isReady = false; // flag to determine if initial routine is done
 let reminderInterval: NodeJS.Timeout;
 
 // Initial Routines
@@ -264,7 +270,7 @@ const onCreateEvent = async (
 const checkReminders = async () => {
     const reminder = await fetchSoonestReminder();
     // if the reminder date is now or has passed
-    if (new Date().toISOString().localeCompare(reminder.date) >= 0) {
+    if (reminder && new Date().toISOString().localeCompare(reminder.date) >= 0) {
         const { guild_id, user_id, channel_id, message } = reminder;
         client.guilds
             .fetch(guild_id)
@@ -274,16 +280,22 @@ const checkReminders = async () => {
                     .then((channel) => {
                         (channel as GuildTextBasedChannel)
                             .send(`**Reminder** for <@${user_id}>:\n${message}`)
+                            .then(() => {
+                                clearInterval(reminderInterval);
+                                deleteReminder(reminder)
+                                    .then(() => {
+                                        // we dont want to wait another 30 seconds
+                                        // we want to see if the next soonest reminder is also now
+                                        // so clear the interval and start it again
+                                        startRemindersCheck();
+                                    })
+                                    .catch(console.error);
+                            })
                             .catch(console.error);
                     })
                     .catch(console.error);
             })
             .catch(console.error);
-        // we dont want to wait another 30 seconds
-        // we want to see if the next soonest reminder is also now
-        // so clear the interval and start it again
-        clearInterval(reminderInterval);
-        startRemindersCheck();
     }
 };
 

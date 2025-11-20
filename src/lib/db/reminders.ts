@@ -60,7 +60,7 @@ export const addReminder = async (reminder: Reminder) => {
     } catch (error) {
         console.log(error);
     } finally {
-        console.log("successfully added new reminder: " + reminder.id);
+        console.log("successfully added new reminder.");
         db.close();
     }
 };
@@ -76,6 +76,18 @@ export const fetchSoonestReminder = async () => {
     } catch (error) {
         console.log(error);
     } finally {
+        db.close();
+    }
+};
+
+export const deleteReminder = async (reminder: Reminder) => {
+    const db = new sqlite3.Database("soapbot.db");
+    try {
+        return await runWithParams(db, "DELETE FROM reminders WHERE id=?", [reminder.id]);
+    } catch (error) {
+        console.log(error);
+    } finally {
+        console.log("successfully deleted reminder: " + reminder.id);
         db.close();
     }
 };

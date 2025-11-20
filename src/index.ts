@@ -77,7 +77,12 @@ export interface EventDetails {
 }
 
 const token = process.env.TOKEN;
-
+// alright im just gonna put this here
+// so in the initial routine, we use this ready flag to delay any listeners from doing their jobs until we're done
+// BUT, it's possible that if the change was made BEFORE the initial routine fetched the guild the event is from, the change could be reflected there
+// and therefore, the initial routine may have already made the change.
+// SO, i put measures in the listeners to check if the change has already occurred.
+// that way we don't get duplicate roles, +2/-2 to subscriber count, or in general, run db queries more than we need to.
 let isReady = false; // flag to determine if initial routine is done
 let reminderInterval: NodeJS.Timeout;
 
@@ -88,13 +93,14 @@ const updateEventsRoles = async () => {
     console.log("start initial routine");
     // checks events in registered guilds and sees if they are in db
     // adds them to db if not
+    // updates db with updated event details
     // also checks subscribers and adds/removes roles from users
     addMissedEvents().then(() => {
         isReady = true; // we can set ready after this because deleted events wont effect incoming event changes
         console.log("ready");
     });
-    // checks events in db and sees if they exist
-    // deletes them from db if not
+    // checks events in db and sees if they exist in discord
+    // updates them to past events if not
     deleteMissedEvents();
 };
 
@@ -116,6 +122,21 @@ const addMissedEvents = async (): Promise<Collection<string, OAuth2Guild>> => {
                     } else {
                         console.log("role exists for " + event.name);
                         role = eventDB.role_id;
+                        // now check that everything about the event is updated
+                        // if name changed, update role name
+                        if (event.name !== eventDB.name) {
+                            event.guild.roles
+                                .edit(eventDB.role_id, {
+                                    name: event.name,
+                                })
+                                .then(() => {
+                                    console.log("role edited for " + event.name);
+                                    update(formatEvent(event, eventDB.role_id));
+                                })
+                                .catch(console.error);
+                        }
+                        // update db with current stats
+                        update(formatEvent(event, eventDB.role_id));
                     }
 
                     if (!role) {
@@ -398,10 +419,17 @@ client.on(
     async (
         guildScheduledEvent: GuildScheduledEvent<GuildScheduledEventStatus>
     ): Promise<void> => {
-        const createEvent = () => {
+        const createEvent = async () => {
             if (isReady) {
-                console.log("event created: " + guildScheduledEvent.name);
-                onCreateEvent(guildScheduledEvent);
+                // check if event exists
+                // if it was creating during the initial routine, we might already have saved it
+                const event = await fetchEvent(guildScheduledEvent.id);
+                if (!event) {
+                    console.log("event created: " + guildScheduledEvent.name);
+                    onCreateEvent(guildScheduledEvent);
+                } else {
+                    console.log("event already exists: " + guildScheduledEvent.name);
+                }
             } else {
                 setTimeout(createEvent, 5000);
             }
@@ -421,7 +449,8 @@ client.on(
             if (isReady) {
                 console.log("event deleted: " + guildScheduledEvent.name);
                 fetchEvent(guildScheduledEvent.id).then((event) => {
-                    if (event) {
+                    // check if event isn't already a past event
+                    if (event && !event.is_past) {
                         guildScheduledEvent.guild.roles
                             .delete(event.role_id)
                             .then(() => {
@@ -431,10 +460,12 @@ client.on(
                                 );
                             })
                             .catch(console.error);
-                    } else {
+                    } else if (!event) {
                         console.warn(
                             "couldnt find event! weirdge... id: " + guildScheduledEvent.id
                         );
+                    } else {
+                        console.log("event already past: " + guildScheduledEvent.name);
                     }
                 });
             } else {
@@ -462,21 +493,33 @@ client.on(
                             newGuildScheduledEvent.status === 4
                         ) {
                             console.log("event canceled: " + newGuildScheduledEvent.name);
-                            // complete or canceled
-                            newGuildScheduledEvent.guild.roles
-                                .delete(event.role_id)
-                                .then(() => {
-                                    console.log(
-                                        "role deleted for " + newGuildScheduledEvent.name
-                                    );
-                                    updateToPastEvent(
-                                        formatEvent(newGuildScheduledEvent, event.role_id)
-                                    );
-                                })
-                                .catch(console.error);
+                            // check if event isn't already a past event
+                            if (!event.is_past) {
+                                // complete or canceled
+                                newGuildScheduledEvent.guild.roles
+                                    .delete(event.role_id)
+                                    .then(() => {
+                                        console.log(
+                                            "role deleted for " +
+                                                newGuildScheduledEvent.name
+                                        );
+                                        updateToPastEvent(
+                                            formatEvent(
+                                                newGuildScheduledEvent,
+                                                event.role_id
+                                            )
+                                        );
+                                    })
+                                    .catch(console.error);
+                            } else {
+                                console.log(
+                                    "event already past: " + newGuildScheduledEvent.name
+                                );
+                            }
                         } else if (
                             oldGuildScheduledEvent.name !== newGuildScheduledEvent.name
                         ) {
+                            // update role name to match event name
                             newGuildScheduledEvent.guild.roles
                                 .edit(event.role_id, {
                                     name: newGuildScheduledEvent.name,
@@ -490,6 +533,11 @@ client.on(
                                     );
                                 })
                                 .catch(console.error);
+                            // update event details
+                            update(formatEvent(newGuildScheduledEvent, event.role_id));
+                        } else {
+                            // update event details
+                            update(formatEvent(newGuildScheduledEvent, event.role_id));
                         }
                     } else {
                         console.warn(
@@ -516,23 +564,46 @@ client.on(
     ): void => {
         const userAdd = () => {
             if (isReady) {
-                fetchEvent(guildScheduledEvent.id).then((event) => {
+                console.log("subscribing");
+                fetchEvent(guildScheduledEvent.id).then(async (event) => {
                     if (event) {
-                        guildScheduledEvent.guild.members
-                            .addRole({
-                                role: event.role_id,
-                                user: user,
-                            })
-                            .then(() => {
-                                console.log(
-                                    "user subscribed: " +
-                                        user.username +
-                                        " - " +
-                                        guildScheduledEvent.name
-                                );
-                                updateSubscriberNum(guildScheduledEvent.id, true);
-                            })
-                            .catch(console.error);
+                        try {
+                            // check if member has role
+                            const member = await guildScheduledEvent.guild.members.fetch(
+                                user.id
+                            );
+                            if (!member.roles.resolve(event.role_id)) {
+                                guildScheduledEvent.guild.members
+                                    .addRole({
+                                        role: event.role_id,
+                                        user: user,
+                                    })
+                                    .then(
+                                        () => {
+                                            console.log(
+                                                "user subscribed: " +
+                                                    user.username +
+                                                    " - " +
+                                                    guildScheduledEvent.name
+                                            );
+                                            updateSubscriberNum(
+                                                guildScheduledEvent.id,
+                                                true
+                                            );
+                                        },
+                                        (reason: any) => {
+                                            console.warn(reason);
+                                        }
+                                    )
+                                    .catch(console.error);
+                            }
+                        } catch (err) {
+                            console.error(err);
+                        }
+                    } else {
+                        console.warn(
+                            "couldnt find event! weirdge... id: " + guildScheduledEvent.id
+                        );
                     }
                 });
             } else {
@@ -553,23 +624,45 @@ client.on(
     ): void => {
         const userRemove = () => {
             if (isReady) {
-                fetchEvent(guildScheduledEvent.id).then((event) => {
+                fetchEvent(guildScheduledEvent.id).then(async (event) => {
                     if (event) {
-                        guildScheduledEvent.guild.members
-                            .removeRole({
-                                role: event.role_id,
-                                user: user,
-                            })
-                            .then(() => {
-                                console.log(
-                                    "user unsubscribed: " +
-                                        user.username +
-                                        " - " +
-                                        guildScheduledEvent.name
-                                );
-                                updateSubscriberNum(guildScheduledEvent.id, false);
-                            })
-                            .catch(console.error);
+                        try {
+                            // check if member has role
+                            const member = await guildScheduledEvent.guild.members.fetch(
+                                user.id
+                            );
+                            if (member.roles.resolve(event.role_id)) {
+                                guildScheduledEvent.guild.members
+                                    .removeRole({
+                                        role: event.role_id,
+                                        user: user,
+                                    })
+                                    .then(
+                                        () => {
+                                            console.log(
+                                                "user unsubscribed: " +
+                                                    user.username +
+                                                    " - " +
+                                                    guildScheduledEvent.name
+                                            );
+                                            updateSubscriberNum(
+                                                guildScheduledEvent.id,
+                                                false
+                                            );
+                                        },
+                                        (reason: any) => {
+                                            console.warn(reason);
+                                        }
+                                    )
+                                    .catch(console.error);
+                            }
+                        } catch (err) {
+                            console.error(err);
+                        }
+                    } else {
+                        console.warn(
+                            "couldnt find event! weirdge... id: " + guildScheduledEvent.id
+                        );
                     }
                 });
             } else {
